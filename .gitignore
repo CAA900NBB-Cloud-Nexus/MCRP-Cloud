@@ -21,3 +21,4 @@ id_rsa.pub
 
 # Ignore Terraform crash logs
 crash.log
+.DS_Store
