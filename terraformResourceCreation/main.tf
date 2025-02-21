@@ -43,16 +43,9 @@ resource "aws_route_table_association" "public_subnet_assoc" {
   route_table_id = aws_route_table.public_rt.id
 }
 
-### **Security Group (Allow SSH, HTTP, and Backend Traffic)**
+### **Security Group for Backend (Restricting Traffic)**
 resource "aws_security_group" "backend_sg" {
   vpc_id = aws_vpc.main_vpc.id
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Allow SSH from anywhere (CHANGE for security)
-  }
 
   ingress {
     from_port   = 80
@@ -81,12 +74,12 @@ resource "aws_ecr_repository" "backend_repo" {
   name = var.ecr_repo_name
 }
 
-### **ECS Cluster**
+### **ECS Cluster for Running Containers**
 resource "aws_ecs_cluster" "backend_cluster" {
   name = var.ecs_cluster_name
 }
 
-### **Use Existing IAM Role for ECS Task Execution (`ecsTaskExecutionRole`)**
+### **IAM Role for ECS Execution**
 data "aws_iam_role" "ecs_execution_role" {
   name = "ecsTaskExecutionRole"
 }
@@ -96,51 +89,11 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-### **Use Existing IAM Role for EC2**
-data "aws_iam_role" "ec2_role" {
-  name = "ec2-backend-role"
-}
-
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2-backend-instance-profile"
-  role = data.aws_iam_role.ec2_role.name
-}
-
-### **Attach IAM Policies for EC2**
-resource "aws_iam_role_policy_attachment" "ecr_access" {
-  role       = data.aws_iam_role.ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-}
-
-resource "aws_iam_role_policy_attachment" "ssm_access" {
-  role       = data.aws_iam_role.ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-### **Store Environment Variables in AWS SSM**
+### **Storing Environment Variables in AWS SSM**
 resource "aws_ssm_parameter" "env_vars" {
   for_each = var.env_vars
 
   name  = each.key
   type  = "SecureString"
   value = each.value
-}
-
-### **Use Existing SSH Key Pair (If Available)**
-data "aws_key_pair" "existing_key" {
-  key_name = "mcrp-ec2-key"
-}
-
-### **EC2 Instance**
-resource "aws_instance" "backend_client" {
-  ami                    = var.ami_id
-  instance_type          = var.instance_type
-  subnet_id              = aws_subnet.public_subnet.id
-  vpc_security_group_ids = [aws_security_group.backend_sg.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
-  key_name               = data.aws_key_pair.existing_key.key_name
-
-  tags = {
-    Name = "backend-client"
-  }
 }
