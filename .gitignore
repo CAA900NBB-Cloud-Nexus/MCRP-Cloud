@@ -7,8 +7,8 @@
 .terraform.lock.hcl
 
 # Ignore Terraform variable files (sensitive data)
-terraform.tfvars
-terraform.tfvars.json
+#terraform.tfvars
+#terraform.tfvars.json
 
 # Ignore SSH private keys
 *.pem
