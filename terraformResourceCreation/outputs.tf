@@ -1,15 +1,7 @@
-output "vpc_id" {
-  value = aws_vpc.main_vpc.id
+output "ecr_repository_url_frontend" {
+  value = aws_ecr_repository.frontend_repo.repository_url
 }
 
-output "subnet_id" {
-  value = aws_subnet.public_subnet.id
-}
-
-output "ecr_repository_url" {
-  value = aws_ecr_repository.backend_repo.repository_url
-}
-
-output "security_group_id" {
-  value = aws_security_group.backend_sg.id
+output "frontend_ecs_cluster_name" {
+  value = aws_ecs_cluster.frontend_cluster.name
 }
