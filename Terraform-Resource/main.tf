@@ -13,7 +13,7 @@ variable "location" {
 }
 
 variable "vm_name" {
-  default = "WinDockerVM"  
+  default = "WinDockerVM"
 }
 
 variable "admin_user" {
@@ -21,23 +21,7 @@ variable "admin_user" {
 }
 
 variable "admin_password" {
-  default = "Shridhar1234"  
-}
-
-variable "aws_region" {
-  default = "us-east-1"
-}
-
-variable "aws_account_id" {
-  default = "970547375353"  
-}
-
-variable "ecr_api_repo" {
-  default = "mcrp-api-image-repo"
-}
-
-variable "ecr_ui_repo" {
-  default = "mcrp-ui-image-repo"
+  default = "Shridhar1234"
 }
 
 resource "azurerm_resource_group" "rg" {
@@ -59,23 +43,17 @@ resource "azurerm_subnet" "subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-resource "azurerm_network_interface" "nic" {
-  name                = "myNIC"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = var.location
-
-  ip_configuration {
-    name                          = "myNicConfig"
-    subnet_id                     = azurerm_subnet.subnet.id
-    private_ip_address_allocation = "Dynamic"
-  }
-}
-
 resource "azurerm_public_ip" "vm" {
   name                = "myPublicIP"
   location            = var.location
   resource_group_name = var.resource_group_name
   allocation_method   = "Static"
+}
+
+resource "azurerm_network_security_group" "nsg" {
+  name                = "vm-nsg"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
 }
 
 resource "azurerm_network_security_rule" "winrm" {
@@ -88,8 +66,26 @@ resource "azurerm_network_security_rule" "winrm" {
   destination_port_range      = "5985"
   source_address_prefix       = "*"
   destination_address_prefix  = "*"
-  resource_group_name         = var.resource_group_name
+  resource_group_name         = azurerm_resource_group.rg.name
   network_security_group_name = azurerm_network_security_group.nsg.name
+}
+
+resource "azurerm_network_interface" "nic" {
+  name                = "myNIC"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = var.location
+
+  ip_configuration {
+    name                          = "myNicConfig"
+    subnet_id                     = azurerm_subnet.subnet.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.vm.id
+  }
+}
+
+resource "azurerm_network_interface_security_group_association" "nsg_association" {
+  network_interface_id      = azurerm_network_interface.nic.id
+  network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
 resource "azurerm_windows_virtual_machine" "vm" {
@@ -107,24 +103,51 @@ resource "azurerm_windows_virtual_machine" "vm" {
   }
 
   source_image_reference {
-  publisher = "MicrosoftWindowsServer"
-  offer     = "WindowsServer"
-  sku       = "2019-Datacenter"
-  version   = "latest"
+    publisher = "MicrosoftWindowsServer"
+    offer     = "WindowsServer"
+    sku       = "2019-Datacenter"
+    version   = "latest"
   }
 
-  provisioner "file" {
-    source      = "install-docker.ps1"  # Path to your local file
-    destination = "C:\\install-docker.ps1"
-
+  provisioner "remote-exec" {
+    inline = [
+      "powershell -ExecutionPolicy Unrestricted -File C:\\enable-winrm.ps1"
+    ]
     connection {
       type     = "winrm"
       user     = var.admin_user
       password = var.admin_password
       host     = azurerm_public_ip.vm.ip_address
       insecure = true
+      timeout  = "10m"
+    }
+  }
+
+  provisioner "file" {
+    source      = "install-docker.ps1"
+    destination = "C:\\install-docker.ps1"
+    
+    connection {
+      type     = "winrm"
+      user     = var.admin_user
+      password = var.admin_password
+      host     = azurerm_public_ip.vm.ip_address
+      insecure = true
+      timeout  = "10m"
+    }
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "powershell -ExecutionPolicy Unrestricted -File C:\\install-docker.ps1"
+    ]
+    connection {
+      type     = "winrm"
+      user     = var.admin_user
+      password = var.admin_password
+      host     = azurerm_public_ip.vm.ip_address
+      insecure = true
+      timeout  = "10m"
     }
   }
 }
-
-
