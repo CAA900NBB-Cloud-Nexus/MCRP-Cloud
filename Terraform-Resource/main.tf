@@ -1,5 +1,7 @@
 provider "azurerm" {
   features {}
+
+  subscription_id = "975f2f0a-fb15-4ffc-8a94-e3e778f2ab22"  
 }
 
 resource "azurerm_resource_group" "rg" {
@@ -88,7 +90,7 @@ resource "azurerm_windows_virtual_machine" "vm" {
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Standard_HDD"
+    storage_account_type = "Standard_LRS"  # ✅ Fixed Storage Type
   }
 
   source_image_reference {
