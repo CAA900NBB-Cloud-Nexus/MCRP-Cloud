@@ -1,85 +1,74 @@
 provider "azurerm" {
   features {}
-  use_msi         = false
-  subscription_id = "975f2f0a-fb15-4ffc-8a94-e3e778f2ab22"
-}
-
-variable "resource_group_name" {
-  default = "myResourceGroup"
-}
-
-variable "location" {
-  default = "East US"
-}
-
-variable "vm_name" {
-  default = "WinDockerVM"
-}
-
-variable "admin_user" {
-  default = "azureadmin"
-}
-
-variable "admin_password" {
-  default = "Shridhar1234"
 }
 
 resource "azurerm_resource_group" "rg" {
-  name     = var.resource_group_name
-  location = var.location
+  name     = "my-resource-group"
+  location = "East US"
+}
+
+resource "azurerm_network_interface" "nic" {
+  name                = "vm-nic"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  ip_configuration {
+    name                          = "public-ip-config"
+    subnet_id                     = azurerm_subnet.public_subnet.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.vm_public_ip.id
+  }
+}
+
+resource "azurerm_public_ip" "vm_public_ip" {
+  name                = "vm-public-ip"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
 }
 
 resource "azurerm_virtual_network" "vnet" {
-  name                = "myVNet"
+  name                = "my-vnet"
+  location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  location            = var.location
   address_space       = ["10.0.0.0/16"]
 }
 
-resource "azurerm_subnet" "subnet" {
-  name                 = "mySubnet"
+resource "azurerm_subnet" "public_subnet" {
+  name                 = "public-subnet"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-resource "azurerm_public_ip" "vm" {
-  name                = "myPublicIP"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  allocation_method   = "Static"
-}
-
 resource "azurerm_network_security_group" "nsg" {
   name                = "vm-nsg"
-  location            = var.location
+  location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-}
 
-resource "azurerm_network_security_rule" "winrm" {
-  name                        = "Allow-WinRM"
-  priority                    = 1002
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "5985"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = azurerm_resource_group.rg.name
-  network_security_group_name = azurerm_network_security_group.nsg.name
-}
+  security_rule {
+    name                       = "AllowRDP"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3389"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 
-resource "azurerm_network_interface" "nic" {
-  name                = "myNIC"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = var.location
-
-  ip_configuration {
-    name                          = "myNicConfig"
-    subnet_id                     = azurerm_subnet.subnet.id
-    private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.vm.id
+  security_rule {
+    name                       = "AllowDocker"
+    priority                   = 1002
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "2375-2376"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
   }
 }
 
@@ -89,17 +78,17 @@ resource "azurerm_network_interface_security_group_association" "nsg_association
 }
 
 resource "azurerm_windows_virtual_machine" "vm" {
-  name                  = var.vm_name
-  resource_group_name   = var.resource_group_name
-  location              = var.location
-  size                  = "Standard_D2s_v3"
-  admin_username        = var.admin_user
-  admin_password        = var.admin_password
+  name                = "my-windows-vm"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  size                = "Standard_B2ms"
+  admin_username      = "adminuser"
+  admin_password      = "P@ssw0rd123!"  # Change this to a secure password
   network_interface_ids = [azurerm_network_interface.nic.id]
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
+    storage_account_type = "Standard_HDD"
   }
 
   source_image_reference {
@@ -109,45 +98,19 @@ resource "azurerm_windows_virtual_machine" "vm" {
     version   = "latest"
   }
 
-  provisioner "remote-exec" {
-    inline = [
-      "powershell -ExecutionPolicy Unrestricted -File C:\\enable-winrm.ps1"
-    ]
-    connection {
-      type     = "winrm"
-      user     = var.admin_user
-      password = var.admin_password
-      host     = azurerm_public_ip.vm.ip_address
-      insecure = true
-      timeout  = "10m"
-    }
-  }
+  custom_data = base64encode(file("${path.module}/install-docker.ps1"))
+}
 
-  provisioner "file" {
-    source      = "install-docker.ps1"
-    destination = "C:\\install-docker.ps1"
-    
-    connection {
-      type     = "winrm"
-      user     = var.admin_user
-      password = var.admin_password
-      host     = azurerm_public_ip.vm.ip_address
-      insecure = true
-      timeout  = "10m"
-    }
-  }
+resource "azurerm_virtual_machine_extension" "docker_install" {
+  name                 = "docker-install"
+  virtual_machine_id   = azurerm_windows_virtual_machine.vm.id
+  publisher            = "Microsoft.Compute"
+  type                 = "CustomScriptExtension"
+  type_handler_version = "1.10"
 
-  provisioner "remote-exec" {
-    inline = [
-      "powershell -ExecutionPolicy Unrestricted -File C:\\install-docker.ps1"
-    ]
-    connection {
-      type     = "winrm"
-      user     = var.admin_user
-      password = var.admin_password
-      host     = azurerm_public_ip.vm.ip_address
-      insecure = true
-      timeout  = "10m"
+  settings = <<SETTINGS
+    {
+      "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File install-docker.ps1"
     }
-  }
+  SETTINGS
 }
