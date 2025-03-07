@@ -19,7 +19,7 @@ variable "admin_user" {
 }
 
 variable "admin_password" {
-  default = "YourSecurePassword123!"  # Change this securely
+  default = "Shridhar1234"  
 }
 
 variable "aws_region" {
@@ -27,7 +27,7 @@ variable "aws_region" {
 }
 
 variable "aws_account_id" {
-  default = "970547375353"  # Replace with your AWS Account ID
+  default = "970547375353"  
 }
 
 variable "ecr_api_repo" {
