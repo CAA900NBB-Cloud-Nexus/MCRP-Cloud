@@ -13,7 +13,7 @@ variable "location" {
 }
 
 variable "vm_name" {
-  default = "myWindowsDockerVM"
+  default = "WinDockerVM"  
 }
 
 variable "admin_user" {
