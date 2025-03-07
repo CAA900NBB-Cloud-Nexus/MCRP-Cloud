@@ -73,7 +73,7 @@ resource "azurerm_network_interface" "nic" {
 
 resource "azurerm_windows_virtual_machine" "vm" {
   name                  = var.vm_name
-  resource_group_name   = azurerm_resource_group.rg.name
+  resource_group_name   = var.resource_group_name
   location              = var.location
   size                  = "Standard_D2s_v3"
   admin_username        = var.admin_user
@@ -85,25 +85,18 @@ resource "azurerm_windows_virtual_machine" "vm" {
     storage_account_type = "Standard_LRS"
   }
 
-  source_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2019-Datacenter-smalldisk"
-    version   = "latest"
-  }
-
   provisioner "file" {
-    source      = "install-docker.ps1"
+    source      = "install-docker.ps1"  # Path to your local file
     destination = "C:\\install-docker.ps1"
-  }
 
-  provisioner "remote-exec" {
-    inline = [
-      "powershell.exe -ExecutionPolicy Bypass -File C:\\install-docker.ps1"
-    ]
-  }
-
-  winrm_listener {
-    protocol = "Http"
+    connection {
+      type     = "winrm"
+      user     = var.admin_user
+      password = var.admin_password
+      host     = azurerm_public_ip.vm.ip_address
+      insecure = true  # Skip certificate validation (for testing)
+    }
   }
 }
+
+
