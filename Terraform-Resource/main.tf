@@ -2,6 +2,14 @@ provider "azurerm" {
   features {}
 }
 
+provider "azurerm" {
+  features {}
+
+  # This enables Terraform to use the Azure CLI login
+  use_msi = false
+}
+
+
 variable "resource_group_name" {
   default = "myResourceGroup"
 }
