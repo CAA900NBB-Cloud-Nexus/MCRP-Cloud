@@ -78,6 +78,21 @@ resource "azurerm_public_ip" "vm" {
   allocation_method   = "Static"
   }
 
+resource "azurerm_network_security_rule" "winrm" {
+  name                        = "Allow-WinRM"
+  priority                    = 1002
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5985"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.nsg.name
+}
+
+
 resource "azurerm_windows_virtual_machine" "vm" {
   name                  = var.vm_name
   resource_group_name   = var.resource_group_name
