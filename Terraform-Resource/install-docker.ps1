@@ -8,11 +8,10 @@ Invoke-WebRequest -Uri "https://awscli.amazonaws.com/AWSCLIV2.msi" -OutFile "AWS
 Start-Process msiexec.exe -ArgumentList "/i AWSCLIV2.msi /quiet" -Wait
 Write-Output "AWS CLI Installed."
 
-# Configure AWS CLI with Credentials (Replace with your actual credentials)
-Write-Output "Configuring AWS CLI..."
-aws configure set aws_access_key_id "AKIA6D6JBVT4VRT3MGHM"
-aws configure set aws_secret_access_key "kjI+BuuqFEV0QMzOn4jMu3V6UhAdHk9FjtsdHMk9"
-aws configure set default.region "us-east-1"  # Your ECR region
+# Configure AWS CLI with Environment Variables (Secure)
+$env:AWS_ACCESS_KEY_ID = Read-Host "AKIA6D6JBVT4VRT3MGHM"
+$env:AWS_SECRET_ACCESS_KEY = Read-Host "kjI+BuuqFEV0QMzOn4jMu3V6UhAdHk9FjtsdHMk9"
+$env:AWS_DEFAULT_REGION = "us-east-1"
 
 # Authenticate Docker with AWS ECR
 Write-Output "Authenticating Docker with AWS ECR..."
