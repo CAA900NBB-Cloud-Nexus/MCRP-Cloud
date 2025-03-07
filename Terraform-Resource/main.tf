@@ -1,7 +1,7 @@
 provider "azurerm" {
   features {}
-  # This enables Terraform to use the Azure CLI login
-  use_msi = false
+  use_msi         = false
+  subscription_id = "975f2f0a-fb15-4ffc-8a94-e3e778f2ab22"
 }
 
 variable "resource_group_name" {
