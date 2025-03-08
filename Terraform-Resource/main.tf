@@ -83,25 +83,50 @@ resource "azurerm_windows_virtual_machine" "vm" {
   name                = "my-windows-vm"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
-  size                = "Standard_B2ms"
+  size               = "Standard_B2ms"
   admin_username      = "adminuser"
-  admin_password      = "P@ssw0rd123!"  # Change this to a secure password
+  admin_password      = "P@ssw0rd123!" # Change this to a secure password
   network_interface_ids = [azurerm_network_interface.nic.id]
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"  # ✅ Fixed Storage Type
+    storage_account_type = "Standard_LRS"
   }
 
-  source_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2019-Datacenter"
-    version   = "latest"
-  }
+  custom_data = base64encode(<<EOF
+  # Install Docker on Windows Server
+  Write-Output "Installing Docker..."
+  Install-WindowsFeature -Name Containers
 
-  custom_data = base64encode(file("${path.module}/install-docker.ps1"))
+  # Install AWS CLI
+  Write-Output "Installing AWS CLI..."
+  Invoke-WebRequest -Uri "https://awscli.amazonaws.com/AWSCLIV2.msi" -OutFile "AWSCLIV2.msi"
+  Start-Process msiexec.exe -ArgumentList "/i AWSCLIV2.msi /quiet" -Wait
+  Write-Output "AWS CLI Installed."
+
+  # Authenticate Docker with AWS ECR
+  Write-Output "Authenticating Docker with AWS ECR..."
+  $ECR_LOGIN = aws ecr get-login-password --region us-east-1
+  docker login --username AWS --password-stdin 970547375353.dkr.ecr.us-east-1.amazonaws.com
+
+  # Pull Docker Images from AWS ECR
+  Write-Output "Pulling Docker Images from AWS ECR..."
+  docker pull 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-api-image-repo:latest
+  docker pull 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-ui-image-repo:latest
+
+  # Run API Container
+  Write-Output "Starting API Container..."
+  docker run -d --name mcrp-api-container -p 5000:5000 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-api-image-repo:latest
+
+  # Run UI Container
+  Write-Output "Starting UI Container..."
+  docker run -d --name mcrp-ui-container -p 80:80 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-ui-image-repo:latest
+
+  Write-Output "Docker containers for API and UI are now running!"
+  EOF
+  )
 }
+
 
 resource "azurerm_virtual_machine_extension" "docker_install" {
   name                 = "docker-install"
