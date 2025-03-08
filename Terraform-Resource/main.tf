@@ -112,7 +112,7 @@ resource "azurerm_virtual_machine_extension" "docker_install" {
 
   settings = <<SETTINGS
     {
-      "fileUris": ["https://raw.githubusercontent.com/CAA900NBB-Cloud-Nexus/MCRP-Cloud/Terraform-Azure/Terraform-Resource/install-docker.ps1"],
+      "fileUris": ["https://raw.githubusercontent.com/CAA900NBB-Cloud-Nexus/MCRP-Cloud/refs/heads/Terraform-Azure/Terraform-Resource/install-docker.ps1"],
       "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File install-docker.ps1"
     }
   SETTINGS
