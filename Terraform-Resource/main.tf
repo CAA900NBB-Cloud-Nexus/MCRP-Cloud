@@ -99,20 +99,19 @@ resource "azurerm_windows_virtual_machine" "vm" {
     version   = "latest"
   }
 
+  # ✅ Write the install_docker.ps1 script to the VM
   custom_data = base64encode(<<EOF
-  # Create PowerShell Script File
-  $scriptPath = "C:\\install-docker.ps1"
+  $scriptPath = "C:\\install_docker.ps1"
   $taskName = "InstallDocker"
 
-  # Write the script to install Windows Containers and Docker
+  # Write the install script
   @"
-  # Enable Script Execution
   Set-ExecutionPolicy Unrestricted -Scope Process -Force
 
   # Install Windows Containers
   Install-WindowsFeature -Name Containers -IncludeAllSubFeature -Restart
 
-  # Wait for Reboot and Resume
+  # Wait for Windows to Restart and Resume Execution
   while ((Get-Service -Name wuauserv).Status -ne "Running") { Start-Sleep -Seconds 30 }
 
   # Install Docker
@@ -125,7 +124,6 @@ resource "azurerm_windows_virtual_machine" "vm" {
   Start-Process msiexec.exe -ArgumentList "/i AWSCLIV2.msi /quiet" -Wait
 
   # Authenticate Docker with AWS ECR
-  Write-Output "Authenticating Docker with AWS ECR..."
   $ECR_LOGIN = aws ecr get-login-password --region us-east-1
   docker login --username AWS --password-stdin 970547375353.dkr.ecr.us-east-1.amazonaws.com
 
@@ -135,11 +133,9 @@ resource "azurerm_windows_virtual_machine" "vm" {
 
   docker pull 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-ui-image-repo:latest
   docker run -d --name mcrp-ui-container -p 80:80 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-ui-image-repo:latest
-
-  Write-Output "Docker containers for API and UI are now running!"
   "@ | Out-File -FilePath $scriptPath -Encoding ascii
 
-  # Schedule Task to Run at Startup
+  # Schedule Task to Run on First Boot
   $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File $scriptPath"
   $trigger = New-ScheduledTaskTrigger -AtStartup
   $principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\\SYSTEM" -LogonType ServiceAccount
@@ -149,4 +145,3 @@ resource "azurerm_windows_virtual_machine" "vm" {
   EOF
   )
 }
-
