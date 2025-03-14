@@ -92,7 +92,6 @@ resource "azurerm_windows_virtual_machine" "vm" {
     storage_account_type = "Standard_LRS"
   }
 
-  # ✅ FIXED: Added `source_image_reference`
   source_image_reference {
     publisher = "MicrosoftWindowsServer"
     offer     = "WindowsServer"
@@ -101,35 +100,53 @@ resource "azurerm_windows_virtual_machine" "vm" {
   }
 
   custom_data = base64encode(<<EOF
-  # Install Docker on Windows Server
-  Write-Output "Installing Docker..."
-  Install-WindowsFeature -Name Containers
+  # Create PowerShell Script File
+  $scriptPath = "C:\\install-docker.ps1"
+  $taskName = "InstallDocker"
+
+  # Write the script to install Windows Containers and Docker
+  @"
+  # Enable Script Execution
+  Set-ExecutionPolicy Unrestricted -Scope Process -Force
+
+  # Install Windows Containers
+  Install-WindowsFeature -Name Containers -IncludeAllSubFeature -Restart
+
+  # Wait for Reboot and Resume
+  while ((Get-Service -Name wuauserv).Status -ne "Running") { Start-Sleep -Seconds 30 }
+
+  # Install Docker
+  Invoke-WebRequest -Uri "https://download.docker.com/win/static/stable/x86_64/docker-20.10.7.zip" -OutFile "docker.zip"
+  Expand-Archive -Path "docker.zip" -DestinationPath "C:\\docker"
+  [Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\\docker", [System.EnvironmentVariableTarget]::Machine)
 
   # Install AWS CLI
-  Write-Output "Installing AWS CLI..."
   Invoke-WebRequest -Uri "https://awscli.amazonaws.com/AWSCLIV2.msi" -OutFile "AWSCLIV2.msi"
   Start-Process msiexec.exe -ArgumentList "/i AWSCLIV2.msi /quiet" -Wait
-  Write-Output "AWS CLI Installed."
 
   # Authenticate Docker with AWS ECR
   Write-Output "Authenticating Docker with AWS ECR..."
   $ECR_LOGIN = aws ecr get-login-password --region us-east-1
   docker login --username AWS --password-stdin 970547375353.dkr.ecr.us-east-1.amazonaws.com
 
-  # Pull Docker Images from AWS ECR
-  Write-Output "Pulling Docker Images from AWS ECR..."
+  # Pull and Run API and UI Containers
   docker pull 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-api-image-repo:latest
-  docker pull 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-ui-image-repo:latest
-
-  # Run API Container
-  Write-Output "Starting API Container..."
   docker run -d --name mcrp-api-container -p 5000:5000 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-api-image-repo:latest
 
-  # Run UI Container
-  Write-Output "Starting UI Container..."
+  docker pull 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-ui-image-repo:latest
   docker run -d --name mcrp-ui-container -p 80:80 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-ui-image-repo:latest
 
   Write-Output "Docker containers for API and UI are now running!"
+  "@ | Out-File -FilePath $scriptPath -Encoding ascii
+
+  # Schedule Task to Run at Startup
+  $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File $scriptPath"
+  $trigger = New-ScheduledTaskTrigger -AtStartup
+  $principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\\SYSTEM" -LogonType ServiceAccount
+  $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Description "Install Docker and Containers on Startup"
+
+  Register-ScheduledTask -TaskName $taskName -InputObject $task -Force
   EOF
   )
 }
+
