@@ -113,10 +113,4 @@ resource "azurerm_virtual_machine_extension" "install_docker" {
     "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File C:\\install-docker.ps1"
   }
   SETTINGS
-
-  protected_settings = <<PROTECTED_SETTINGS
-  {
-    "script": "${base64encode(file("install_docker.ps1"))}"
-  }
-  PROTECTED_SETTINGS
 }
