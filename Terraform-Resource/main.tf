@@ -98,55 +98,25 @@ resource "azurerm_windows_virtual_machine" "vm" {
     sku       = "2019-Datacenter-smalldisk"
     version   = "latest"
   }
-
-  custom_data = base64encode(<<EOF
-  # Create PowerShell Script File
-  $scriptPath = "C:\\install-docker.ps1"
-  $taskName = "InstallDocker"
-
-  # Write the script to install Windows Containers and Docker
-  @"
-  # Enable Script Execution
-  Set-ExecutionPolicy Unrestricted -Scope Process -Force
-
-  # Install Windows Containers
-  Install-WindowsFeature -Name Containers -IncludeAllSubFeature -Restart
-
-  # Wait for Reboot and Resume
-  while ((Get-Service -Name wuauserv).Status -ne "Running") { Start-Sleep -Seconds 30 }
-
-  # Install Docker
-  Invoke-WebRequest -Uri "https://download.docker.com/win/static/stable/x86_64/docker-20.10.7.zip" -OutFile "docker.zip"
-  Expand-Archive -Path "docker.zip" -DestinationPath "C:\\docker"
-  [Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\\docker", [System.EnvironmentVariableTarget]::Machine)
-
-  # Install AWS CLI
-  Invoke-WebRequest -Uri "https://awscli.amazonaws.com/AWSCLIV2.msi" -OutFile "AWSCLIV2.msi"
-  Start-Process msiexec.exe -ArgumentList "/i AWSCLIV2.msi /quiet" -Wait
-
-  # Authenticate Docker with AWS ECR
-  Write-Output "Authenticating Docker with AWS ECR..."
-  $ECR_LOGIN = aws ecr get-login-password --region us-east-1
-  docker login --username AWS --password-stdin 970547375353.dkr.ecr.us-east-1.amazonaws.com
-
-  # Pull and Run API and UI Containers
-  docker pull 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-api-image-repo:latest
-  docker run -d --name mcrp-api-container -p 5000:5000 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-api-image-repo:latest
-
-  docker pull 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-ui-image-repo:latest
-  docker run -d --name mcrp-ui-container -p 80:80 970547375353.dkr.ecr.us-east-1.amazonaws.com/mcrp-ui-image-repo:latest
-
-  Write-Output "Docker containers for API and UI are now running!"
-  "@ | Out-File -FilePath $scriptPath -Encoding ascii
-
-  # Schedule Task to Run at Startup
-  $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File $scriptPath"
-  $trigger = New-ScheduledTaskTrigger -AtStartup
-  $principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\\SYSTEM" -LogonType ServiceAccount
-  $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Description "Install Docker and Containers on Startup"
-
-  Register-ScheduledTask -TaskName $taskName -InputObject $task -Force
-  EOF
-  )
 }
 
+# ✅ Azure Custom Script Extension to Execute install_docker.ps1 Automatically
+resource "azurerm_virtual_machine_extension" "install_docker" {
+  name                 = "InstallDocker"
+  virtual_machine_id   = azurerm_windows_virtual_machine.vm.id
+  publisher            = "Microsoft.Compute"
+  type                 = "CustomScriptExtension"
+  type_handler_version = "1.10"
+
+  settings = <<SETTINGS
+  {
+    "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File C:\\install-docker.ps1"
+  }
+  SETTINGS
+
+  protected_settings = <<PROTECTED_SETTINGS
+  {
+    "script": "${base64encode(file("install_docker.ps1"))}"
+  }
+  PROTECTED_SETTINGS
+}
