@@ -98,6 +98,21 @@ resource "azurerm_windows_virtual_machine" "vm" {
     sku       = "2019-Datacenter-smalldisk"
     version   = "latest"
   }
+
+  # ✅ Upload install_docker.ps1 Before Execution
+  provisioner "file" {
+    source      = "install_docker.ps1"  # Local script file
+    destination = "C:\\install-docker.ps1"  # Target path in VM
+
+    connection {
+      type     = "winrm"
+      user     = "adminuser"
+      password = "P@ssw0rd123!"
+      host     = self.public_ip_address
+      port     = 5985
+      insecure = true
+    }
+  }
 }
 
 # ✅ Azure Custom Script Extension to Execute install_docker.ps1 Automatically
@@ -110,7 +125,7 @@ resource "azurerm_virtual_machine_extension" "install_docker" {
 
   settings = <<SETTINGS
   {
-    "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File C:\\install-docker.ps1"
+    "commandToExecute": "if (Test-Path C:\\install-docker.ps1) { powershell -ExecutionPolicy Unrestricted -File C:\\install-docker.ps1 } else { Write-Host 'Script not found! Check file upload.' }"
   }
   SETTINGS
 }
